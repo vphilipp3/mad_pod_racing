@@ -375,7 +375,7 @@ void gen_solutions_mut(Solution* s, int nbr, int solution_len){
         for(int j = 0; j<MUT_SOLUTIONS_NBR; j++){
             int jt = j;
 
-            check_watchdog("Gen solutions xx");
+            // check_watchdog("Gen solutions xx");
 
             s[i].teamMoves[j].move_1.angle = angles[((c)/((int) pow(5, (int) jt))) % 5];
             s[i].teamMoves[j].move_1.thrust = thurst[((c)/((int) pow(5, (int) jt))) % 5];
@@ -639,13 +639,13 @@ void update(){
             Players[count].angle += 360.0;
         }
 
-        fprintf(stderr, "x:%f y:%f vx:%f vy:%f a:%f ckp_id:%d \n", 
-            Players[count].unit.position.x,
-            Players[count].unit.position.y,
-            Players[count].unit.speed.x,
-            Players[count].unit.speed.y,
-            Players[count].angle,
-            Players[count].nextcheckpoint);
+        // fprintf(stderr, "x:%f y:%f vx:%f vy:%f a:%f ckp_id:%d \n", 
+        //     Players[count].unit.position.x,
+        //     Players[count].unit.position.y,
+        //     Players[count].unit.speed.x,
+        //     Players[count].unit.speed.y,
+        //     Players[count].angle,
+        //     Players[count].nextcheckpoint);
 
         Players[count].action.boost = false; 
         Players[count].action.shield = false; 
@@ -677,13 +677,13 @@ void update(){
             Players[count].angle += 360.0;
         }
 
-        fprintf(stderr, "x:%f y:%f vx:%f vy:%f a:%f ckp_id:%d \n", 
-            Players[count].unit.position.x,
-            Players[count].unit.position.y,
-            Players[count].unit.speed.x,
-            Players[count].unit.speed.y,
-            Players[count].angle,
-            Players[count].nextcheckpoint);
+        // fprintf(stderr, "x:%f y:%f vx:%f vy:%f a:%f ckp_id:%d \n", 
+        //     Players[count].unit.position.x,
+        //     Players[count].unit.position.y,
+        //     Players[count].unit.speed.x,
+        //     Players[count].unit.speed.y,
+        //     Players[count].angle,
+        //     Players[count].nextcheckpoint);
     }
        
     rank_players();
@@ -1342,12 +1342,8 @@ long evaluation(){
     float a3 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint)].position, Players[best_teammate].angle);
 
     return (evaluate(&Players[best_teammate]) - evaluate(&Players[best_opp]))*50
-        + 0*(Players[best_teammate].unit.speed.x*Players[best_teammate].unit.speed.x + Players[best_teammate].unit.speed.y*Players[best_teammate].unit.speed.y)
-        - 0*distance(&Players[worst_teammate].unit.position, &Players[best_opp].unit.position)
         - distance(&Players[worst_teammate].unit.position, &race.checkpoints[(Players[best_opp].nextcheckpoint)%race.checkpoint_nbr].position)
-        - 0*a /*- Players[best_teammate].timeout*100*/
-        - 5*pts - min(Players[best_teammate].timeout-92,0)*0 - a2*1 - a3*2
-        - (100-Players[best_teammate].timout_to_last_ckp)*0;
+        - 5*pts - a2*1 - a3*0;
 }
 
 
@@ -1576,7 +1572,7 @@ void output(Pod* p, Move* move) {
         #endif
     } else if (boost && p->boost_available) {
         p->boost_available = false;
-        fprintf(stderr, "print sol\n");
+        // fprintf(stderr, "print sol\n");
         fprintf(fptr, "print sol\n");
         #ifdef ONLINE
         printf("%d %d BOOST\n", (int) round(px), (int) round(py), (int) move->thrust);
@@ -1585,7 +1581,7 @@ void output(Pod* p, Move* move) {
         fprintf(stderr, "%d %d %d\n", (int) round(px), (int) round(py), (int) move->thrust);
         #endif
     } else {
-        fprintf(stderr, "print sol\n");
+        // fprintf(stderr, "print sol\n");
         fprintf(fptr, "print sol\n");
         #ifdef ONLINE
         printf("%d %d %d\n", (int) round(px), (int) round(py), (int) move->thrust);
@@ -1830,7 +1826,7 @@ int main()
                 (int) race.checkpoints[1].position.y);
 
         } else {
-            fprintf(stderr, "update\n");
+            // fprintf(stderr, "update\n");
             #ifdef ONLINE
             update();
             #endif
@@ -1891,7 +1887,7 @@ int main()
 
             store();
 
-            fprintf(stderr, "test solutions\n");
+            // fprintf(stderr, "test solutions\n");
             test_solutions_mutations();
         }
 
