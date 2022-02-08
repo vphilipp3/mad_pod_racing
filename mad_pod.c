@@ -16,7 +16,6 @@
 #define SOLUTION_LEN 6
 #define SOLUTIONS_NBR 10000
 #define MUT_SOLUTIONS_NBR 15
-#define PLAYERS 4
 
 
 //#define OFFLINE 1
@@ -84,6 +83,7 @@ struct Pod {
     int rank;
     int ckp_nbr;
     int dist_to_ckp;
+    int timout_to_last_ckp;
 };
 
 typedef struct Race Race;
@@ -179,6 +179,8 @@ void check_watchdog(char* txt){
 
 void mutate(Move* this, float amplitude) {
 
+
+
     float ramin = this->angle - 36.0 * amplitude;
     float ramax = this->angle + 36.0 * amplitude;
 
@@ -191,6 +193,7 @@ void mutate(Move* this, float amplitude) {
     }
 
     this->angle = ramin + (ramax - ramin) * rand() / ( RAND_MAX + 1.0);
+    //this->angle = random(ramin, ramax);
 
     int pmin = this->thrust - 100 * amplitude;
     int pmax = this->thrust + 100 * amplitude;
@@ -202,16 +205,17 @@ void mutate(Move* this, float amplitude) {
     if (pmax > 0) {
         pmax = 100;
     }
-
+    //float rd = 0.5 + rand() / (RAND_MAX + 1.0);
     float rd = 3.0 * (rand()/(RAND_MAX + 1.0));
     if(rd>=1){
         rd = 1;
     } else {
         rd = rd;
     }
-
+    //this->thrust = pmin + (pmax - pmin) * rand() / RAND_MAX;
     this->thrust = (int) 100.0 * rd;
     
+    //this->thrust = random(pmin, pmax);
 }
 
 void mutate_s(Solution* s, float amplitude){
@@ -381,10 +385,176 @@ void gen_solutions_mut(Solution* s, int nbr, int solution_len){
             
         }
         s[i].len = solution_len;
+        // for(int j = 8; j<8; j++){ // 0:0 (0) 0:1 (1) 1:1 (2) 1:2 (3) 2:2 (4) c/2 (c+1)/2
+        // 0:0 0:1 0:2 0:3 1:0 1:1 1:2 1:3
+        //     s[i].teamMoves[j].move_1.angle = 0;
+        //     s[i].teamMoves[j].move_1.thrust = 100;
+  
+        //     s[i].teamMoves[j].move_2.angle = 0;
+        //     s[i].teamMoves[j].move_2.thrust = 100.0;
+        //     s[i].len = solution_len;
+        // }
         c++;
     }
 }
 
+
+void gen_solutions(Solution* s, int nbr, int solution_len){
+    //Players[0].angle
+    int s_n = 0;
+    int a[2] = {0,0};
+
+    a[0] = diffAngle(race.checkpoints[Players[0].nextcheckpoint].position,
+                 Players[0].unit.position,
+                 Players[0].angle);
+    a[1] = diffAngle(race.checkpoints[Players[1].nextcheckpoint].position,
+                Players[0].unit.position,
+                Players[0].angle);
+    for(int o = 0; o < 2; o++){
+        for(int j = 0; j<SOLUTION_LEN; j++){
+            int turn_a, turn_t;
+            if(a[o]>=18){
+                if(a[o]>90){
+                    turn_t = 0;
+                } else {
+                    turn_t = 100;
+                }
+                turn_a = 18;
+                a[o] -= 18;
+            } else if (a[o]<18 && a[o]>-18){
+                turn_a = a[o];
+                a[o] = 0;
+                turn_t = 100;
+            } else {
+                if(a[o]<-90){
+                    turn_t = 0;
+                } else {
+                    turn_t = 100;
+                }
+                turn_a = -18;
+                a[o] += 18;
+            }
+            if(o==0){
+                s[s_n].teamMoves[j].move_1.angle = turn_a;
+                s[s_n].teamMoves[j].move_1.thrust = turn_t;
+            } else if (o==1){
+                s[s_n].teamMoves[j].move_2.angle = turn_a;
+                s[s_n].teamMoves[j].move_2.thrust = turn_t;
+            }
+        }
+    }
+
+    a[0] = diffAngle(race.checkpoints[Players[0].nextcheckpoint].position,
+                 Players[0].unit.position,
+                 Players[0].angle);
+    a[1] = diffAngle(race.checkpoints[Players[1].nextcheckpoint].position,
+                Players[0].unit.position,
+                Players[0].angle);
+
+    s[s_n].len = solution_len;
+    s_n += 1;
+
+    for(int o = 0; o < 2; o++){
+        for(int j = 0; j<SOLUTION_LEN; j++){
+            int turn_a, turn_t;
+            if(a[o]>=18){
+                turn_t = 0;
+                turn_a = 18;
+                a[o] -= 18;
+            } else if (a[o]>5) {
+                turn_a = a[o];
+                a[o] = 0;
+                turn_t = 0;
+            } else if (a[o]<=-18){
+                turn_t = 0;
+                turn_a = -18;
+                a[o] += 18;
+            } else if (a[o]<-5) {
+                turn_a = a[o];
+                a[o] = 0;
+                turn_t = 0;
+            } else {
+                turn_a = 0;
+                turn_t = 100;
+            }
+            if(o==0){
+                s[s_n].teamMoves[j].move_1.angle = turn_a;
+                s[s_n].teamMoves[j].move_1.thrust = turn_t;
+            } else if (o==1){
+                s[s_n].teamMoves[j].move_2.angle = turn_a;
+                s[s_n].teamMoves[j].move_2.thrust = turn_t;
+            }
+        }
+    }
+    s[s_n].len = solution_len;
+
+    s_n += 1;
+
+    naive_solution(&s[s_n]);
+    s[s_n].len = solution_len;
+    check_watchdog("p naive_solution");
+
+    s_n += 1;
+
+    #ifdef PRINT_NAIVE
+    fprintf(stderr, "print naive solution 1\n");
+    for(int j = 0; j<SOLUTION_LEN; j++){
+        fprintf(stderr, "[%f:%d][%f:%d]\n",
+            s[0].teamMoves[j].move_1.angle,
+            s[0].teamMoves[j].move_1.thrust,
+            s[0].teamMoves[j].move_2.angle,
+            s[0].teamMoves[j].move_2.thrust);
+    }
+
+    fprintf(stderr, "print naive solution 2\n");
+    for(int j = 0; j<SOLUTION_LEN; j++){
+        fprintf(stderr, "[%f:%d][%f:%d]\n",
+            s[1].teamMoves[j].move_1.angle,
+            s[1].teamMoves[j].move_1.thrust,
+            s[1].teamMoves[j].move_2.angle,
+            s[1].teamMoves[j].move_2.thrust);
+    }
+
+    fprintf(stderr, "print naive solution 3\n");
+    for(int j = 0; j<SOLUTION_LEN; j++){
+        fprintf(stderr, "[%f:%d][%f:%d]\n",
+            s[2].teamMoves[j].move_1.angle,
+            s[2].teamMoves[j].move_1.thrust,
+            s[2].teamMoves[j].move_2.angle,
+            s[2].teamMoves[j].move_2.thrust);
+    }
+    #endif
+
+    int angles[5] = {0,18,-18,5,-5};
+    int thurst[5] = {100,100,100,100,100};
+    int c = 0;
+    
+    for(int i = s_n; i<nbr; i++){
+        for(int j = 0; j<SOLUTION_LEN; j++){
+            int jt = j;
+
+            check_watchdog("Gen solutions xx");
+
+            s[i].teamMoves[j].move_1.angle = angles[(int) ((c)/((int) pow(5, (int) jt))) % 5];
+            s[i].teamMoves[j].move_1.thrust = thurst[(int) ((c)/((int) pow(5, (int) jt))) % 5];
+
+            s[i].teamMoves[j].move_2.angle = 0;
+            s[i].teamMoves[j].move_2.thrust = 100;
+            
+        }
+        s[i].len = solution_len;
+        // for(int j = 8; j<8; j++){ // 0:0 (0) 0:1 (1) 1:1 (2) 1:2 (3) 2:2 (4) c/2 (c+1)/2
+        // 0:0 0:1 0:2 0:3 1:0 1:1 1:2 1:3
+        //     s[i].teamMoves[j].move_1.angle = 0;
+        //     s[i].teamMoves[j].move_1.thrust = 100;
+  
+        //     s[i].teamMoves[j].move_2.angle = 0;
+        //     s[i].teamMoves[j].move_2.thrust = 100.0;
+        //     s[i].len = solution_len;
+        // }
+        c++;
+    }
+}
 
 long distance2(Coordonnees* p1, Coordonnees* p2) {
     return ((long) p1->x - p2->x)*((long) p1->x - p2->x) + ((long) p1->y - p2->y)*((long) p1->y - p2->y);
@@ -424,6 +594,7 @@ void init(){
         Players[count].boost_available = true;
         Players[count].rank = 0;
         Players[count].ckp_nbr = 0;
+        Players[count].timout_to_last_ckp = 100;
     }
     for(count = 2; count < 4; count++){
         Players[count].unit.prev_position.x = Players[count].unit.position.x;
@@ -435,6 +606,7 @@ void init(){
         Players[count].team = OPPONENT_TYPE;
         Players[count].rank = 0;
         Players[count].ckp_nbr = 0;
+        Players[count].timout_to_last_ckp = 100;
     }
     
 }
@@ -456,6 +628,10 @@ void update(){
             }
 
             Players[count].dist_to_ckp = distance(&Players[count].unit.position, &race.checkpoints[Players[count].nextcheckpoint].position);
+
+
+        //Players[count].angle -= 90;
+        //Players[count].angle *= -Players[count].angle;
         
         if(Players[count].angle>=360.0){
             Players[count].angle -= 360.0;
@@ -490,6 +666,11 @@ void update(){
 
             Players[count].dist_to_ckp = distance(&Players[count].unit.position, &race.checkpoints[Players[count].nextcheckpoint].position);
 
+
+
+        //Players[count].angle -= 90;
+        //Players[count].angle = -Players[count].angle;
+
         if(Players[count].angle>=360.0){
             Players[count].angle -= 360.0;
         } else if(Players[count].angle<0.0){
@@ -513,7 +694,17 @@ int compare (const void * a, const void * b)
   return (((Pod*)a)->ckp_nbr - ((Pod*)b)->ckp_nbr );
 }
 
+// int main ()
+// {
+//   int n;
+//   qsort (values, 6, sizeof(Pod), compare);
+//   for (n=0; n<6; n++)
+//      printf ("%d ",values[n]);
+//   return 0;
+// }
+
 bool collision(Unit* u_1, Unit* u_2, Collision* r_c) {
+    //#define PRINT_COL
 
     static Unit* prev_u_1;
     static Unit* prev_u_2;
@@ -524,6 +715,7 @@ bool collision(Unit* u_1, Unit* u_2, Collision* r_c) {
         prev_u_2 = u_2;
     }
 
+      // Square of the distance
     long dist = (long) distance2(&u_1->position, &u_2->position) + 1;
 
     // Sum of the radii squared
@@ -674,6 +866,18 @@ bool collision(Unit* u_1, Unit* u_2, Collision* r_c) {
     return false;
 }
 
+double compute_abs_angle(int start_x, int start_y, int end_x, int end_y){
+    double angle;
+
+    int dot = start_x*end_x + start_y*end_y;      // dot product between [x1, y1] and [x2, y2]
+    int det = start_x*end_y - start_y*end_x;      // determinant
+
+    angle = atan2(det, dot);
+
+    angle = angle*180/3.14; // [-180;+180]
+    return angle;
+}
+
 
 Coordonnees closest(Coordonnees* pt, Coordonnees* vect_a, Coordonnees* vect_b) {
 
@@ -710,6 +914,7 @@ void move(Pod* current_pod, float t){
 }
 
 void after_moved(Pod* current_pod){
+
 
     // Friction: the current speed vector of each pod is multiplied by 0.85
     current_pod->unit.speed.x *= 0.85;
@@ -797,6 +1002,9 @@ float diffAngle(Coordonnees p, Coordonnees this, float angle) {
 
 void rotate(Pod* current_pod, Coordonnees* target){
     // Rotation: the pod rotates to face the target point, with a maximum of 18 degrees (except for the 1rst round).
+    // float req_rotation_angle = compute_abs_angle(target->x - current_pod->unit.position.x, 
+    //                                             target->y - current_pod->unit.position.y, 0, 1) 
+    //                                 - current_pod->angle;
     float req_rotation_angle = diffAngle(*target, current_pod->unit.position, current_pod->angle);
     current_pod->angle += min(18,max(-18,req_rotation_angle));
 
@@ -818,6 +1026,7 @@ void bounce_checkpoint(Pod* current_pod, Unit* p) {
     if(race.checkpoints[current_pod->nextcheckpoint].position.x == p->position.x){
         current_pod->nextcheckpoint += 1;
         current_pod->nextcheckpoint = (current_pod->nextcheckpoint >= race.checkpoint_nbr)?0:current_pod->nextcheckpoint;
+        current_pod->timout_to_last_ckp = current_pod->timeout;
         current_pod->timeout = 100;
         current_pod->ckp_nbr += 1;
         current_pod->checkpoints_checked += 1;
@@ -913,6 +1122,7 @@ void bounce_pod(Pod* p, Pod* current_pod) {
     #endif
 }
 
+//#define PRINT_PLAY
 void play(Pod pods[], int pods_len, Unit checkpoints[], int checkpoints_len) {
     #ifdef PRINT_PLAY
     fprintf(stderr, "PLAY \n");
@@ -1011,8 +1221,18 @@ void play(Pod pods[], int pods_len, Unit checkpoints[], int checkpoints_len) {
             } else {
                 bounce_pod(firstCollision.pod_1, firstCollision.pod_2);
             }
+            // Play out the collision
+            //firstCollision.unit_1.bounce(firstCollision.unit_2);
 
-            t += firstCollision.t; 
+            t += firstCollision.t;
+            // fprintf(stderr, "%f [%f:%f][%f:%f]\n",
+            //         t,
+            //         firstCollision.pod_1->unit.position.x,
+            //         firstCollision.pod_1->unit.position.y,
+            //         firstCollision.pod_2->unit.position.x,
+            //         firstCollision.pod_2->unit.position.y
+            //         );
+ 
        }
     }
 
@@ -1022,9 +1242,37 @@ void play(Pod pods[], int pods_len, Unit checkpoints[], int checkpoints_len) {
 }
 
 long evaluate(Pod* p) {
-           
-    return p->checkpoints_checked*50000 
-    - distance(&p->unit.position,  &race.checkpoints[p->nextcheckpoint].position);
+
+    // float a = diffAngle(race.checkpoints[((p->nextcheckpoint+1) % race.checkpoint_nbr)].position,
+    //             p->unit.position,
+    //             p->angle);
+    
+    // if (a > 180){
+    //     a -= 360;
+    //     a *= -1;
+    // } else if (a < -180){
+    //     a += 360;
+    // } else if (a < 0){
+    //     a *= -1;
+    // }
+    // a = 0;
+
+    // float speed = sqrt(p->unit.speed.x*p->unit.speed.x + p->unit.speed.y*p->unit.speed.y)/100;
+    // speed = 0;
+    Coordonnees p2 = race.checkpoints[p->nextcheckpoint].position;
+    Coordonnees n_ckp = race.checkpoints[(p->nextcheckpoint+1)%race.checkpoint_nbr].position;
+    n_ckp.x -= p2.x;
+    n_ckp.y -= p2.y;
+    float k = 550/sqrt(n_ckp.x*n_ckp.x+n_ckp.y*n_ckp.y);
+    p2.x += k*n_ckp.x;
+    p2.y += k*n_ckp.y;
+    //p2.x += p->unit.
+
+
+    return p->checkpoints_checked*50000*(0.98+0.02*min(100.0-p->timeout,8)/8.0) 
+    - distance(&p->unit.position,  &p2);// - a + speed
+    /*- distance(&p->unit.position,  &race.checkpoints[((p->nextcheckpoint+1) % race.checkpoint_nbr)].position)/4;*/
+    // - l'angle entre la direction du pod et le prochain ckp (ssi distance inf. a X)
 }
 
 long evaluation(){
@@ -1090,16 +1338,22 @@ long evaluation(){
     }
 
     float a = diffAngle(Players[best_opp].unit.position, Players[worst_teammate].unit.position, Players[worst_teammate].angle);
+    float a2 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint+1)%race.checkpoint_nbr].position, Players[best_teammate].angle);
+    float a3 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint)].position, Players[best_teammate].angle);
 
     return (evaluate(&Players[best_teammate]) - evaluate(&Players[best_opp]))*50
         + 0*(Players[best_teammate].unit.speed.x*Players[best_teammate].unit.speed.x + Players[best_teammate].unit.speed.y*Players[best_teammate].unit.speed.y)
         - 0*distance(&Players[worst_teammate].unit.position, &Players[best_opp].unit.position)
         - distance(&Players[worst_teammate].unit.position, &race.checkpoints[(Players[best_opp].nextcheckpoint)%race.checkpoint_nbr].position)
         - 0*a /*- Players[best_teammate].timeout*100*/
-        - 5*pts ;
+        - 5*pts - min(Players[best_teammate].timeout-92,0)*0 - a2*1 - a3*2
+        - (100-Players[best_teammate].timout_to_last_ckp)*0;
 }
 
+
+
 void apply(Pod* current_pod, Move* mv){
+    //fprintf(stderr, "a(%f) th(%d)\n", mv->angle, mv->thrust);
 
     float a = current_pod->angle + mv->angle;
     //a += 180;
@@ -1109,17 +1363,22 @@ void apply(Pod* current_pod, Move* mv){
     } else if (a < 0.0) {
         a += 360.0;
     }
-
     // Look for a point corresponding to the angle we want
     // Multiply by 10000.0 to limit rounding errors
     a = a * M_PI / 180.0;
     float px = current_pod->unit.position.x + cos(a) * 10000.0;
     float py = current_pod->unit.position.y + sin(a) * 10000.0;
 
+    //rotate(current_pod, &current_pod->action.target);
+    //boost(current_pod, current_pod->action.boost);
+
     current_pod->action.thrust = mv->thrust;
     current_pod->action.target.x = px;
     current_pod->action.target.y = py;
 }
+
+#define PLAYERS 4
+
 
 // Copy the players in order to roll back to turn start situation after a simulation
 void store(){
@@ -1219,6 +1478,24 @@ long naive_solution(Solution* c){
     return score;
 }
 
+Move simple_bot(Pod* p){
+
+    Move mv;
+    float a = diffAngle(race.checkpoints[p->nextcheckpoint].position,
+                        p->unit.position, 
+                        p->angle);
+
+    if(a > 90){
+        mv.thrust = 0;
+    } else {
+        mv.thrust = 100;
+    }
+
+    mv.angle = a;
+
+    return mv;
+}
+
 long score_players(Solution* s){
     #ifdef PRINT_SCOREP
     fprintf(stderr, "Score players (len: %d)\n",s->len);
@@ -1226,6 +1503,11 @@ long score_players(Solution* s){
 
     // Play out the turns
     for (int i = 0; i < s->len; i++) {
+        Move p2 = simple_bot(&Players[2]);
+        apply(&Players[2], &p2);
+        Move p3 = simple_bot(&Players[3]);
+        apply(&Players[3], &p3);
+
         // Apply the moves to the pods before playing
         apply(&Players[0], &s->teamMoves[i].move_1);
         apply(&Players[1], &s->teamMoves[i].move_2);
@@ -1236,6 +1518,10 @@ long score_players(Solution* s){
         boost(&Players[0], Players[0].action.boost);
         rotate(&Players[1], &Players[1].action.target);
         boost(&Players[1], Players[1].action.boost);
+        rotate(&Players[2], &Players[2].action.target);
+        boost(&Players[2], Players[2].action.boost);
+        rotate(&Players[3], &Players[3].action.target);
+        boost(&Players[3], Players[3].action.boost);
 
         play(Players, PLAYERS, race.checkpoints, race.checkpoint_nbr);
     }
@@ -1340,6 +1626,71 @@ void crossover_s(Solution* s1, Solution* s2){
     }
 }
 
+void test_solutions(){
+
+
+    Solution s[SOLUTIONS_NBR];
+
+    for(int j = 0; j<SOLUTIONS_NBR;++j){
+        for(int i = 0; i<SOLUTION_LEN; ++i){
+            s[j].teamMoves[i].move_1.angle = 0.0;
+            s[j].teamMoves[i].move_1.thrust = 0;
+            s[j].teamMoves[i].move_2.angle = 0.0;
+            s[j].teamMoves[i].move_2.thrust = 0;
+        }
+    }
+    long mScore;
+    print_timestamp();
+    fprintf(stderr, "gen solutions\n");
+    gen_solutions(s,SOLUTIONS_NBR,SOLUTION_LEN);
+
+    int i = 0;
+    int best_solution = 0;
+
+    while (delta_us < 70000 && i < SOLUTIONS_NBR) {
+        //Solution solution = s[i];
+        //fprintf(stderr, "test solution n°%d (%da%dt)\n",i, (int) solution.teamMoves[0].move_1.angle, (int) solution.teamMoves[0].move_1.thrust);
+        print_timestamp();
+        long score = score_players(&s[i]);
+        //fprintf(stderr, "Scr %d %d\n", mScore, score);
+        if (i == 0 || score > mScore) {
+            mScore = score;
+            best_solution = i;
+            fprintf(stderr, "new best solution (%d: %ld) (%lu) (i:%d)\n", best_solution, mScore, delta_us,i);
+            for(int j = 0; j<SOLUTION_LEN; j++){
+                fprintf(stderr, "[%f:%d][%f:%d]\n",
+                    s[best_solution].teamMoves[j].move_1.angle,
+                    s[best_solution].teamMoves[j].move_1.thrust,
+                    s[best_solution].teamMoves[j].move_2.angle,
+                    s[best_solution].teamMoves[j].move_2.thrust);
+            }
+        }
+        print_timestamp();
+        
+        if(i<3){
+            fprintf(stderr, "Solution %d score: %ld\n", i, score);
+        }
+        i++;
+    }
+
+    fprintf(stderr, "print best solution (%d: %ld) (%lu) (i:%d)\n", best_solution, mScore, delta_us,i);
+    expla = true;
+    score_players(&s[best_solution]);
+    expla = false;
+    // for(int j = 0; j<SOLUTION_LEN; j++){
+    //     fprintf(stderr, "[%f:%d][%f:%d]\n",
+    //         s[best_solution].teamMoves[j].move_1.angle,
+    //         s[best_solution].teamMoves[j].move_1.thrust,
+    //         s[best_solution].teamMoves[j].move_2.angle,
+    //         s[best_solution].teamMoves[j].move_2.thrust);
+    // }
+    output(&Players[0], &s[best_solution].teamMoves[0].move_1);
+    output(&Players[1], &s[best_solution].teamMoves[0].move_2);
+    #ifdef OFFLINE
+    move_1 = s[best_solution].teamMoves[0].move_1;
+    move_2 = s[best_solution].teamMoves[0].move_2;
+    #endif
+}
 
 void test_solutions_mutations(){
     
