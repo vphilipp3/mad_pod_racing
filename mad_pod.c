@@ -76,6 +76,7 @@ struct Pod {
     float angle;
     int nextcheckpoint;
     bool boost_available;
+    int shield;
     Action action;
     int timeout;
     int checkpoints_checked;
@@ -115,6 +116,7 @@ typedef struct Move Move;
 struct Move {
     float angle;
     int thrust;
+    bool shield;
 };
 
 typedef struct TeamMoves TeamMoves;
@@ -179,8 +181,6 @@ void check_watchdog(char* txt){
 
 void mutate(Move* this, float amplitude) {
 
-
-
     float ramin = this->angle - 36.0 * amplitude;
     float ramax = this->angle + 36.0 * amplitude;
 
@@ -205,6 +205,11 @@ void mutate(Move* this, float amplitude) {
     if (pmax > 0) {
         pmax = 100;
     }
+
+    if(rand()/(RAND_MAX + 1.0)<0.01){
+        this->shield = true;
+    }
+
     //float rd = 0.5 + rand() / (RAND_MAX + 1.0);
     float rd = 3.0 * (rand()/(RAND_MAX + 1.0));
     if(rd>=1){
@@ -222,7 +227,13 @@ void mutate_s(Solution* s, float amplitude){
     float rd = rand();
     for(int i = 0; i < s->len; i++){
         mutate(&s->teamMoves[i].move_1, amplitude);
+        if(s->teamMoves[i].move_1.shield){
+            Players[0].shield = -3;
+        }
         mutate(&s->teamMoves[i].move_2, amplitude);
+        if(s->teamMoves[i].move_2.shield){
+            Players[1].shield = -3;
+        }
     }
 
 }
@@ -595,6 +606,7 @@ void init(){
         Players[count].rank = 0;
         Players[count].ckp_nbr = 0;
         Players[count].timout_to_last_ckp = 100;
+        Players[count].shield = 0;
     }
     for(count = 2; count < 4; count++){
         Players[count].unit.prev_position.x = Players[count].unit.position.x;
@@ -607,6 +619,7 @@ void init(){
         Players[count].rank = 0;
         Players[count].ckp_nbr = 0;
         Players[count].timout_to_last_ckp = 100;
+        Players[count].shield = 0;
     }
     
 }
@@ -648,7 +661,7 @@ void update(){
         //     Players[count].nextcheckpoint);
 
         Players[count].action.boost = false; 
-        Players[count].action.shield = false; 
+        //Players[count].action.shield = false; 
     }
     for(count = 2; count < 4; count++){
         scanf("%f%f%f%f%f%d", 
@@ -909,6 +922,7 @@ void move(Pod* current_pod, float t){
     fprintf(stderr, "Moving [%d](%f:%f) [%d:%d]\n", current_pod, current_pod->unit.speed.x * t, current_pod->unit.speed.y * t);
     #endif
     // Movement: The speed vector is added to the position of the pod. If a collision would occur at this point, the pods rebound off each other.
+    
     current_pod->unit.position.x += current_pod->unit.speed.x * t;
     current_pod->unit.position.y += current_pod->unit.speed.y * t;
 }
@@ -963,9 +977,12 @@ void rank_players(){
 
 void boost(Pod* current_pod, float thrust){
     // Acceleration: the pod's facing vector is multiplied by the given thrust value. The result is added to the current speed vector.
-    float r_angle = current_pod->angle*M_PI/180;
-    current_pod->unit.speed.x += cos(r_angle)*current_pod->action.thrust;
-    current_pod->unit.speed.y += sin(r_angle)*current_pod->action.thrust;
+    
+    if(current_pod->shield==0){
+        float r_angle = current_pod->angle*M_PI/180;
+        current_pod->unit.speed.x += cos(r_angle)*current_pod->action.thrust;
+        current_pod->unit.speed.y += sin(r_angle)*current_pod->action.thrust;
+    }
 }
 
 float getAngle(Coordonnees p, Coordonnees this) {
@@ -1323,8 +1340,12 @@ long evaluation(){
         if(expla){
             fprintf(stderr, "Target in view ! [%d,%d] \n", (int)tgt.x, (int)tgt.y);
         }
-    } else if(distance2(&Players[worst_teammate].unit.position, &next_target)>1500*1500){
-        pts += distance(&Players[worst_teammate].unit.position, &next_target);
+    } else if(distance2(&Players[worst_teammate].unit.position, &next_target)<1500*1500){
+        //pts += distance(&Players[worst_teammate].unit.position, &Players[best_opp].unit.position);
+        pts += diffAngle(Players[best_opp].unit.position, 
+                        Players[worst_teammate].unit.position, 
+                        Players[worst_teammate].angle);
+        pts -= 10000;
         if(expla){
             fprintf(stderr, "Stby at rdv-point ! [%d,%d] \n", (int)next_target.x, (int)next_target.y);
         }
@@ -1337,13 +1358,23 @@ long evaluation(){
         }
     }
 
-    float a = diffAngle(Players[best_opp].unit.position, Players[worst_teammate].unit.position, Players[worst_teammate].angle);
-    float a2 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint+1)%race.checkpoint_nbr].position, Players[best_teammate].angle);
-    float a3 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint)].position, Players[best_teammate].angle);
+    float a = diffAngle(Players[best_opp].unit.position, 
+                        Players[worst_teammate].unit.position, 
+                        Players[worst_teammate].angle);
+    float a2 = diffAngle(Players[best_teammate].unit.position, 
+                        race.checkpoints[(Players[best_teammate].nextcheckpoint+1)%race.checkpoint_nbr].position, 
+                        Players[best_teammate].angle);
+    float a3 = diffAngle(Players[best_teammate].unit.position,
+                        race.checkpoints[(Players[best_teammate].nextcheckpoint)].position, 
+                        Players[best_teammate].angle);
 
-    return (evaluate(&Players[best_teammate]) - evaluate(&Players[best_opp]))*50
-        - distance(&Players[worst_teammate].unit.position, &race.checkpoints[(Players[best_opp].nextcheckpoint)%race.checkpoint_nbr].position)
-        - 5*pts - a2*1 - a3*0;
+    return 
+        (evaluate(&Players[best_teammate]) - evaluate(&Players[best_opp]))*50
+        - distance(&Players[worst_teammate].unit.position, 
+                    &race.checkpoints[(Players[best_opp].nextcheckpoint)%race.checkpoint_nbr].position)
+        - 5*pts 
+        - a2*1 
+        - a3*0;
 }
 
 
@@ -1367,7 +1398,7 @@ void apply(Pod* current_pod, Move* mv){
 
     //rotate(current_pod, &current_pod->action.target);
     //boost(current_pod, current_pod->action.boost);
-
+    current_pod->action.shield = mv->shield;
     current_pod->action.thrust = mv->thrust;
     current_pod->action.target.x = px;
     current_pod->action.target.y = py;
@@ -1499,6 +1530,15 @@ long score_players(Solution* s){
 
     // Play out the turns
     for (int i = 0; i < s->len; i++) {
+
+        if(Players[0].shield<0){
+            s->teamMoves[0].move_1.shield = true;
+            Players[0].shield += 1;
+        }
+        if(Players[1].shield<0){
+            s->teamMoves[1].move_2.shield = true;
+            Players[1].shield += 1;
+        }
         Move p2 = simple_bot(&Players[2]);
         apply(&Players[2], &p2);
         Move p3 = simple_bot(&Players[3]);
@@ -1563,9 +1603,10 @@ void output(Pod* p, Move* move) {
         fprintf(stderr, "Error!");   
         exit(1);             
     }
-    if (false) {
+    if (move->shield) {
         #ifdef ONLINE
         printf("%d %d SHIELD\n", (int) round(px), (int) round(py));
+        fprintf(stderr, "SHIELLLLLLDDDDDDDDD !!!!!!!!!!!!!!!!! (%d) \n", p->shield);
         #else
         fprintf(fptr, "%d %d SHIELD\n", (int) round(px), (int) round(py));
         fprintf(stderr, "%d %d SHIELD\n", (int) round(px), (int) round(py));
