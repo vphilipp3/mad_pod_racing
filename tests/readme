@@ -1,0 +1,2 @@
+vincent@VXPS:/mnt/c/Users/Vincent/Documents/GitHub/mad_pod_racing/tests$ pipenv shell
+(tests) vincent@VXPS:/mnt/c/Users/Vincent/Documents/GitHub/mad_pod_racing/tests$ c++ -O3 -Wall -shared -std=c++11 -fPIC `python3 -m pybind11 --includes` ../mad_pod.c -o madpod.so

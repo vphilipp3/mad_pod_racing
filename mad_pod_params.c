@@ -6,7 +6,6 @@
 #include <time.h>
 #include <bits/types/struct_timeval.h>
 #include <sys/time.h>
-#include <pybind11/pybind11.h>
 
 
 /**
@@ -77,7 +76,6 @@ struct Pod {
     float angle;
     int nextcheckpoint;
     bool boost_available;
-    int shield;
     Action action;
     int timeout;
     int checkpoints_checked;
@@ -117,7 +115,6 @@ typedef struct Move Move;
 struct Move {
     float angle;
     int thrust;
-    bool shield;
 };
 
 typedef struct TeamMoves TeamMoves;
@@ -151,50 +148,10 @@ void update();
 void init();
 void process(Pod *current_pod);
 Coordonnees closest(Coordonnees* pt, Coordonnees* vect_a, Coordonnees* vect_b);
-float getAngle(Coordonnees p, Coordonnees cpod);
-float diffAngle(Coordonnees p, Coordonnees cpod, float angle);
+float getAngle(Coordonnees p, Coordonnees this);
+float diffAngle(Coordonnees p, Coordonnees this, float angle);
 long naive_solution(Solution* c);
 void rank_players();
-
-
-namespace py = pybind11;
-
-PYBIND11_MODULE(madpod, mod) {
-    //mod.def("add", &add, "Madpod code.");
-    py::class_<Coordonnees>(mod, "Coordonnees")
-        .def(py::init<>()) 
-        .def_readwrite("x", &Coordonnees::x)
-        .def_readwrite("y", &Coordonnees::y);
-    mod.def("getAngle", &getAngle, "Get angle.");
-    mod.def("closest", &closest, "closest");
-    py::class_<Unit>(mod, "Unit")
-        .def(py::init<>())
-        .def_readwrite("type", &Unit::type)
-        .def_readwrite("radius", &Unit::radius)
-        .def_readwrite("position", &Unit::position)
-        .def_readwrite("speed", &Unit::speed)
-        .def_readwrite("prev_position", &Unit::prev_position);
-    py::class_<Pod>(mod, "Pod")
-        .def(py::init<>())
-        .def_readwrite("unit", &Pod::unit)
-        .def_readwrite("angle", &Pod::angle);
-}
-
-
-    // Unit unit;
-    // float distance_to_opp[2];
-    // float angle_to_opp[2];
-    // float angle;
-    // int nextcheckpoint;
-    // bool boost_available;
-    // Action action;
-    // int timeout;
-    // int checkpoints_checked;
-    // int team;
-    // int rank;
-    // int ckp_nbr;
-    // int dist_to_ckp;
-    // int timout_to_last_ckp;
 
 
 static struct timeval last_check;
@@ -220,10 +177,12 @@ void check_watchdog(char* txt){
 }
 
 
-void mutate(Move* cpod, float amplitude) {
+void mutate(Move* this, float amplitude) {
 
-    float ramin = cpod->angle - 36.0 * amplitude;
-    float ramax = cpod->angle + 36.0 * amplitude;
+
+
+    float ramin = this->angle - 36.0 * amplitude;
+    float ramax = this->angle + 36.0 * amplitude;
 
     if (ramin < -18.0) {
         ramin = -18.0;
@@ -233,11 +192,11 @@ void mutate(Move* cpod, float amplitude) {
         ramax = 18.0;
     }
 
-    cpod->angle = ramin + (ramax - ramin) * rand() / ( RAND_MAX + 1.0);
-    //cpod->angle = random(ramin, ramax);
+    this->angle = ramin + (ramax - ramin) * rand() / ( RAND_MAX + 1.0);
+    //this->angle = random(ramin, ramax);
 
-    int pmin = cpod->thrust - 200 * amplitude;
-    int pmax = cpod->thrust + 200 * amplitude;
+    int pmin = this->thrust - 200 * amplitude;
+    int pmax = this->thrust + 200 * amplitude;
 
     if (pmin < 0) {
         pmin = 0;
@@ -246,11 +205,6 @@ void mutate(Move* cpod, float amplitude) {
     if (pmax > 0) {
         pmax = 200;
     }
-
-    if(rand()/(RAND_MAX + 1.0)<0.01){
-        this->shield = true;
-    }
-
     //float rd = 0.5 + rand() / (RAND_MAX + 1.0);
     float rd = 3.0 * (rand()/(RAND_MAX + 1.0));
     if(rd>=1){
@@ -258,23 +212,17 @@ void mutate(Move* cpod, float amplitude) {
     } else {
         rd = rd;
     }
-    //cpod->thrust = pmin + (pmax - pmin) * rand() / RAND_MAX;
-    cpod->thrust = (int) 200.0 * rd;
+    //this->thrust = pmin + (pmax - pmin) * rand() / RAND_MAX;
+    this->thrust = (int) 200.0 * rd;
     
-    //cpod->thrust = random(pmin, pmax);
+    //this->thrust = random(pmin, pmax);
 }
 
 void mutate_s(Solution* s, float amplitude){
     float rd = rand();
     for(int i = 0; i < s->len; i++){
         mutate(&s->teamMoves[i].move_1, amplitude);
-        if(s->teamMoves[i].move_1.shield){
-            Players[0].shield = -3;
-        }
         mutate(&s->teamMoves[i].move_2, amplitude);
-        if(s->teamMoves[i].move_2.shield){
-            Players[1].shield = -3;
-        }
     }
 
 }
@@ -622,20 +570,15 @@ void init(){
 
     int count;
 
-    if(scanf("%d", &race.lap_nbr)){
-        fprintf(stderr, "%d laps\n", race.lap_nbr);
-    }
-    if(scanf("%d", &race.checkpoint_nbr)){
-        fprintf(stderr, "%d laps, %d checkpoints\n", race.lap_nbr, race.checkpoint_nbr);
-    }
+    scanf("%d", &race.lap_nbr);
+    scanf("%d", &race.checkpoint_nbr);
 
-    
+    fprintf(stderr, "%d laps, %d checkpoints\n", race.lap_nbr, race.checkpoint_nbr);
 
     for(count = 0; count < race.checkpoint_nbr; count++)
     {
-        if(scanf("%f%f", &race.checkpoints[count].position.x, &race.checkpoints[count].position.y)){
-            fprintf(stderr, "n°%d %f %f\n", count, race.checkpoints[count].position.x, race.checkpoints[count].position.y);
-        }   
+        scanf("%f%f", &race.checkpoints[count].position.x, &race.checkpoints[count].position.y);
+        fprintf(stderr, "n°%d %f %f\n", count, race.checkpoints[count].position.x, race.checkpoints[count].position.y);
     }
 
     update();
@@ -705,7 +648,7 @@ void update(){
         //     Players[count].nextcheckpoint);
 
         Players[count].action.boost = false; 
-        //Players[count].action.shield = false; 
+        Players[count].action.shield = false; 
     }
     for(count = 2; count < 4; count++){
         scanf("%f%f%f%f%f%d", 
@@ -801,7 +744,7 @@ bool collision(Unit* u_1, Unit* u_2, Collision* r_c) {
         #endif 
 
         if(debug){
-            fprintf(stderr, "Immediate collision (%ld-%ld) [%ld:%ld]\n", dist, sr, (long) u_1, (long) u_2);
+            fprintf(stderr, "Immediate collision (%d-%d) [%d:%d]\n", dist, sr, u_1, u_2);
             fprintf(stderr, "Units touching 1 --> (%f:%f)(%f:%f)\n", 
                 u_1->position.x, 
                 u_1->position.y, 
@@ -855,7 +798,7 @@ bool collision(Unit* u_1, Unit* u_2, Collision* r_c) {
     // Square of the distance between us and that point
     float mypdist = distance2(&p, &myp);
 
-    // If the distance between u and cpod line is less than the sum of the radii, there might be a collision
+    // If the distance between u and this line is less than the sum of the radii, there might be a collision
     if (pdist < sr) {
      // Our speed on the line
         float length = sqrt(vx*vx + vy*vy);
@@ -895,7 +838,7 @@ bool collision(Unit* u_1, Unit* u_2, Collision* r_c) {
         #endif
 
         if(debug){
-            fprintf(stderr, "Delayed collision (%f)(%f:%f) [%ld:%ld]\n", t, p.x, p.y, (long) u_1, (long) u_2);
+            fprintf(stderr, "Delayed collision (%f)(%f:%f) [%d:%d]\n", t, p.x, p.y, u_1, u_2);
             fprintf(stderr, "Units touching 1 --> (%f:%f)(%f:%f)\n", 
                 u_1->position.x, 
                 u_1->position.y, 
@@ -966,7 +909,6 @@ void move(Pod* current_pod, float t){
     fprintf(stderr, "Moving [%d](%f:%f) [%d:%d]\n", current_pod, current_pod->unit.speed.x * t, current_pod->unit.speed.y * t);
     #endif
     // Movement: The speed vector is added to the position of the pod. If a collision would occur at this point, the pods rebound off each other.
-
     current_pod->unit.position.x += current_pod->unit.speed.x * t;
     current_pod->unit.position.y += current_pod->unit.speed.y * t;
 }
@@ -1021,18 +963,15 @@ void rank_players(){
 
 void boost(Pod* current_pod, float thrust){
     // Acceleration: the pod's facing vector is multiplied by the given thrust value. The result is added to the current speed vector.
-    
-    if(current_pod->shield==0){
-        float r_angle = current_pod->angle*M_PI/180;
-        current_pod->unit.speed.x += cos(r_angle)*current_pod->action.thrust;
-        current_pod->unit.speed.y += sin(r_angle)*current_pod->action.thrust;
-    }
+    float r_angle = current_pod->angle*M_PI/180;
+    current_pod->unit.speed.x += cos(r_angle)*current_pod->action.thrust;
+    current_pod->unit.speed.y += sin(r_angle)*current_pod->action.thrust;
 }
 
-float getAngle(Coordonnees p, Coordonnees cpod) {
-    float d = distance(&p, &cpod);
-    float dx = (p.x - cpod.x) / d;
-    float dy = (p.y - cpod.y) / d;
+float getAngle(Coordonnees p, Coordonnees this) {
+    float d = distance(&p, &this);
+    float dx = (p.x - this.x) / d;
+    float dy = (p.y - this.y) / d;
 
     // Simple trigonometry. We multiply by 180.0 / PI to convert radiants to degrees.
     float a = acos(dx) * 180.0 / M_PI;
@@ -1045,8 +984,8 @@ float getAngle(Coordonnees p, Coordonnees cpod) {
     return a;
 }
 
-float diffAngle(Coordonnees p, Coordonnees cpod, float angle) {
-    float a = getAngle(p, cpod);
+float diffAngle(Coordonnees p, Coordonnees this, float angle) {
+    float a = getAngle(p, this);
 
     // To know whether we should turn clockwise or not we look at the two ways and keep the smallest
     // The ternary operators replace the use of a modulo operator which would be slower
@@ -1120,7 +1059,7 @@ void bounce_pod(Pod* p, Pod* current_pod) {
     float nx = current_pod->unit.position.x - p->unit.position.x;
     float ny = current_pod->unit.position.y - p->unit.position.y;
 
-    // Square of the distance between the 2 pods. cpod value could be hardcoded because it is always 800²
+    // Square of the distance between the 2 pods. This value could be hardcoded because it is always 800²
     float nxnysquare = nx*nx + ny*ny;
 
     float dvx = current_pod->unit.speed.x - p->unit.speed.x;
@@ -1163,8 +1102,8 @@ void bounce_pod(Pod* p, Pod* current_pod) {
     p->unit.position.y += (fy / m1) / 50; //(current_pod->unit.speed.x>0)?10:-10;
     p->unit.position.y += ((fy / m1)>0)?1:-1;
 
-    // cpod is one of the rare places where a Vector class would have made the code more readable.
-    // But cpod place is called so often that I can't pay a performance price to make it more readable.
+    // This is one of the rare places where a Vector class would have made the code more readable.
+    // But this place is called so often that I can't pay a performance price to make it more readable.
 
     #ifdef PRINT_BOUNCE
 
@@ -1189,7 +1128,7 @@ void play(Pod pods[], int pods_len, Unit checkpoints[], int checkpoints_len) {
     fprintf(stderr, "PLAY \n");
     #endif
     check_watchdog("PLAY");
-    // cpod tracks the time during the turn. The goal is to reach 1.0
+    // This tracks the time during the turn. The goal is to reach 1.0
     float t = 0.0;
     int cnt = 0;
 
@@ -1268,8 +1207,8 @@ void play(Pod pods[], int pods_len, Unit checkpoints[], int checkpoints_len) {
             t = 1.0;
         } else {
             if(debug){
-                fprintf(stderr, "PrevCol: [%ld;%ld](%f)\n", (long) prev_col.pod_1, (long) prev_col.pod_2,prev_col.t);
-                fprintf(stderr, "firstCol: [%ld;%ld](%f)\n", (long) firstCollision.pod_1,(long) firstCollision.pod_2,firstCollision.t);
+                fprintf(stderr, "PrevCol: [%d;%d](%f)\n",prev_col.pod_1,prev_col.pod_2,prev_col.t);
+                fprintf(stderr, "firstCol: [%d;%d](%f)\n",firstCollision.pod_1,firstCollision.pod_2,firstCollision.t);
             }
             prev_col = firstCollision;
             // Move the pods to reach the time `t` of the collision
@@ -1384,12 +1323,8 @@ long evaluation(){
         if(expla){
             fprintf(stderr, "Target in view ! [%d,%d] \n", (int)tgt.x, (int)tgt.y);
         }
-    } else if(distance2(&Players[worst_teammate].unit.position, &next_target)<1500*1500){
-        //pts += distance(&Players[worst_teammate].unit.position, &Players[best_opp].unit.position);
-        pts += diffAngle(Players[best_opp].unit.position, 
-                        Players[worst_teammate].unit.position, 
-                        Players[worst_teammate].angle);
-        pts -= 10000;
+    } else if(distance2(&Players[worst_teammate].unit.position, &next_target)>1500*1500){
+        pts += distance(&Players[worst_teammate].unit.position, &next_target);
         if(expla){
             fprintf(stderr, "Stby at rdv-point ! [%d,%d] \n", (int)next_target.x, (int)next_target.y);
         }
@@ -1402,23 +1337,13 @@ long evaluation(){
         }
     }
 
-    float a = diffAngle(Players[best_opp].unit.position, 
-                        Players[worst_teammate].unit.position, 
-                        Players[worst_teammate].angle);
-    float a2 = diffAngle(Players[best_teammate].unit.position, 
-                        race.checkpoints[(Players[best_teammate].nextcheckpoint+1)%race.checkpoint_nbr].position, 
-                        Players[best_teammate].angle);
-    float a3 = diffAngle(Players[best_teammate].unit.position,
-                        race.checkpoints[(Players[best_teammate].nextcheckpoint)].position, 
-                        Players[best_teammate].angle);
+    float a = diffAngle(Players[best_opp].unit.position, Players[worst_teammate].unit.position, Players[worst_teammate].angle);
+    float a2 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint+1)%race.checkpoint_nbr].position, Players[best_teammate].angle);
+    float a3 = diffAngle(Players[best_teammate].unit.position, race.checkpoints[(Players[best_teammate].nextcheckpoint)].position, Players[best_teammate].angle);
 
-    return 
-        (evaluate(&Players[best_teammate]) - evaluate(&Players[best_opp]))*50
-        - distance(&Players[worst_teammate].unit.position, 
-                    &race.checkpoints[(Players[best_opp].nextcheckpoint)%race.checkpoint_nbr].position)
-        - 5*pts 
-        - a2*1 
-        - a3*0;
+    return (evaluate(&Players[best_teammate]) - evaluate(&Players[best_opp]))*50
+        - distance(&Players[worst_teammate].unit.position, &race.checkpoints[(Players[best_opp].nextcheckpoint)%race.checkpoint_nbr].position)
+        - 5*pts - a2*1 - a3*0;
 }
 
 
@@ -1442,7 +1367,7 @@ void apply(Pod* current_pod, Move* mv){
 
     //rotate(current_pod, &current_pod->action.target);
     //boost(current_pod, current_pod->action.boost);
-    current_pod->action.shield = mv->shield;
+
     current_pod->action.thrust = mv->thrust;
     current_pod->action.target.x = px;
     current_pod->action.target.y = py;
@@ -1523,10 +1448,10 @@ long naive_solution(Solution* c){
                 turn_a = -18;
                 a[o] += 18;
             }
-            if(o==0){
+            if(c==0){
                 c->teamMoves[j].move_1.angle = turn_a;
                 c->teamMoves[j].move_1.thrust = turn_t;
-            } else if (o==1){
+            } else if (c==1){
                 c->teamMoves[j].move_2.angle = turn_a;
                 c->teamMoves[j].move_2.thrust = turn_t;
             }
@@ -1574,15 +1499,6 @@ long score_players(Solution* s){
 
     // Play out the turns
     for (int i = 0; i < s->len; i++) {
-
-        if(Players[0].shield<0){
-            s->teamMoves[0].move_1.shield = true;
-            Players[0].shield += 1;
-        }
-        if(Players[1].shield<0){
-            s->teamMoves[1].move_2.shield = true;
-            Players[1].shield += 1;
-        }
         Move p2 = simple_bot(&Players[2]);
         apply(&Players[2], &p2);
         Move p3 = simple_bot(&Players[3]);
@@ -1647,10 +1563,9 @@ void output(Pod* p, Move* move) {
         fprintf(stderr, "Error!");   
         exit(1);             
     }
-    if (move->shield) {
+    if (false) {
         #ifdef ONLINE
         printf("%d %d SHIELD\n", (int) round(px), (int) round(py));
-        fprintf(stderr, "SHIELLLLLLDDDDDDDDD !!!!!!!!!!!!!!!!! (%d) \n", p->shield);
         #else
         fprintf(fptr, "%d %d SHIELD\n", (int) round(px), (int) round(py));
         fprintf(stderr, "%d %d SHIELD\n", (int) round(px), (int) round(py));
@@ -1660,7 +1575,7 @@ void output(Pod* p, Move* move) {
         // fprintf(stderr, "print sol\n");
         fprintf(fptr, "print sol\n");
         #ifdef ONLINE
-        printf("%d %d BOOST\n", (int) round(px), (int) round(py));
+        printf("%d %d BOOST\n", (int) round(px), (int) round(py), (int) move->thrust);
         #else
         fprintf(fptr, "%d %d %d\n", (int) round(px), (int) round(py), (int) move->thrust);
         fprintf(stderr, "%d %d %d\n", (int) round(px), (int) round(py), (int) move->thrust);
@@ -1678,8 +1593,6 @@ void output(Pod* p, Move* move) {
     fclose(fptr);
 }
 
-// Update delta_us and print it
-// /!\ print commented out
 void print_timestamp(){
     gettimeofday(&lap_check, NULL);
     delta_us = (unsigned long) 1000000 * (lap_check.tv_sec - lap_start_time.tv_sec) + (lap_check.tv_usec - lap_start_time.tv_usec);
@@ -1801,6 +1714,7 @@ void test_solutions_mutations(){
         for(int m = 1; m<prev_best.len; m++){
             prev_best.teamMoves[m-1] = prev_best.teamMoves[m];
         }
+        prev_best.len - 1;
         s[SOLUTIONS_NBR - 1] = prev_best;
     } else {
         first_test  = false;
